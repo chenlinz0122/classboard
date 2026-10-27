@@ -1,4 +1,4 @@
-import type { AppData, Period, Settings } from './types'
+import type { AppData, Period, ReminderClockRule, Settings } from './types'
 import { firstMondayOnOrAfter, startOfWeek, toDateOnly } from './date'
 
 export const APP_NAME = '课表与DDL看板'
@@ -21,7 +21,10 @@ export const DEFAULT_PERIODS: Period[] = [
   { index: 12, start: '20:10', end: '20:55' }
 ]
 
-export const DEFAULT_REMINDER_OFFSETS = [1440, 360, 60]
+export const DEFAULT_REMINDER_OFFSETS = [4320, 1440, 360, 60]
+
+/** 默认在前一天 20:00 提醒，避免深夜截止的作业在半夜收到「提前 1 天」通知。 */
+export const DEFAULT_REMINDER_CLOCK_RULES: ReminderClockRule[] = [{ daysBefore: 1, time: '20:00' }]
 
 export function suggestedSemesterStart(now = new Date()): string {
   const month = now.getMonth() // 0-11
@@ -38,6 +41,12 @@ export function defaultSettings(now = new Date()): Settings {
     totalWeeks: 19,
     periods: DEFAULT_PERIODS.map((period) => ({ ...period })),
     reminderOffsets: [...DEFAULT_REMINDER_OFFSETS],
+    reminderClockRules: DEFAULT_REMINDER_CLOCK_RULES.map((rule) => ({ ...rule })),
+    push: {
+      wxpusherEnabled: false,
+      wxpusherAppToken: '',
+      wxpusherUid: ''
+    },
     classRemindersEnabled: false,
     classReminderMinutes: 10,
     dailySummaryEnabled: true,
@@ -92,6 +101,18 @@ export function normalizeSettings(
           }))
         : base.periods,
     reminderOffsets: normalizeOffsets(input.reminderOffsets, base.reminderOffsets),
+    reminderClockRules: normalizeClockRules(
+      input.reminderClockRules === undefined ? base.reminderClockRules : input.reminderClockRules
+    ),
+    push: {
+      wxpusherEnabled: Boolean((input.push as { wxpusherEnabled?: boolean } | undefined)?.wxpusherEnabled),
+      wxpusherAppToken: String(
+        (input.push as { wxpusherAppToken?: unknown } | undefined)?.wxpusherAppToken ?? ''
+      ).slice(0, 128),
+      wxpusherUid: String(
+        (input.push as { wxpusherUid?: unknown } | undefined)?.wxpusherUid ?? ''
+      ).slice(0, 128)
+    },
     widgetOpacity: clamp(Number(input.widgetOpacity ?? 1), 0.65, 1),
     totalWeeks: clamp(Number(input.totalWeeks ?? 19), 1, 30),
     classReminderMinutes: clamp(Number(input.classReminderMinutes ?? 10), 1, 120),
@@ -106,6 +127,17 @@ export function normalizeSettings(
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(merged.semesterStart)) {
     merged.semesterStart = toDateOnly(startOfWeek(now))
+  }
+  // 一次性迁移：老版本数据（还没有时刻规则字段）自动补上「提前 3 天」节点。
+  if (
+    Array.isArray(input.reminderOffsets) &&
+    input.reminderClockRules === undefined &&
+    !input.reminderOffsets.includes(4320)
+  ) {
+    merged.reminderOffsets = normalizeOffsets(
+      [...input.reminderOffsets, 4320],
+      base.reminderOffsets
+    )
   }
   return merged
 }
@@ -143,4 +175,27 @@ export function formatOffsetLabel(minutes: number): string {
     return h === 1 ? '提前 1 小时' : `提前 ${h} 小时`
   }
   return `提前 ${minutes} 分钟`
+}
+
+export function normalizeClockRules(input: unknown): ReminderClockRule[] {
+  if (!Array.isArray(input)) return []
+  const seen = new Set<string>()
+  const rules: ReminderClockRule[] = []
+  for (const raw of input) {
+    if (!raw || typeof raw !== 'object') continue
+    const candidate = raw as Partial<ReminderClockRule>
+    const daysBefore = clamp(Math.round(Number(candidate.daysBefore ?? 1)), 0, 30)
+    const time = sanitizeClock(candidate.time, '20:00')
+    const key = `${daysBefore}|${time}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    rules.push({ daysBefore, time })
+  }
+  return rules.sort((a, b) => b.daysBefore - a.daysBefore || a.time.localeCompare(b.time))
+}
+
+export function formatClockRuleLabel(rule: ReminderClockRule): string {
+  const prefix =
+    rule.daysBefore === 0 ? '截止当天' : rule.daysBefore === 1 ? '前一天' : `提前 ${rule.daysBefore} 天`
+  return `${prefix} ${rule.time}`
 }

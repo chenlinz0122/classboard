@@ -39,7 +39,10 @@ describe('reminder plan', () => {
     const data = withDeadline(addMinutes(now, 60))
     const first = buildReminderPlan(data, now)
     expect(first.actions).toHaveLength(1)
-    data.deadlines[0].reminder.sent[`${data.deadlines[0].dueAt}|60`] = now.toISOString()
+    // 首轮会把所有已到达的节点一并标记，之后不再重复提醒
+    for (const key of first.actions[0].sentKeys ?? []) {
+      data.deadlines[0].reminder.sent[key] = now.toISOString()
+    }
     const second = buildReminderPlan(data, addMinutes(now, 1))
     expect(second.actions).toHaveLength(0)
   })
@@ -76,5 +79,33 @@ describe('reminder plan', () => {
     const later = buildReminderPlan(data, addMinutes(now, 11))
     expect(later.actions).toHaveLength(1)
     expect(later.actions[0].kind).toBe('snooze')
+  })
+
+  it('fires a clock rule before the due time instead of midnight', () => {
+    // 截止 10 月 30 日 23:59，前一天 20:00 应在 10 月 29 日 20:00 触发
+    const now = new Date(2026, 9, 29, 20, 1)
+    const data = withDeadline(new Date(2026, 9, 30, 23, 59), [60])
+    data.settings.reminderClockRules = [{ daysBefore: 1, time: '20:00' }]
+    const plan = buildReminderPlan(data, now)
+    expect(plan.actions).toHaveLength(1)
+    expect(plan.actions[0].kind).toBe('deadline')
+    expect(plan.actions[0].sentKeys).toContain(`${data.deadlines[0].dueAt}|clock:1:20:00`)
+  })
+
+  it('does not fire a clock rule before its scheduled time', () => {
+    const now = new Date(2026, 9, 29, 19, 0)
+    const data = withDeadline(new Date(2026, 9, 30, 23, 59), [60])
+    data.settings.reminderClockRules = [{ daysBefore: 1, time: '20:00' }]
+    expect(buildReminderPlan(data, now).actions).toHaveLength(0)
+  })
+
+  it('fires a 3-day offset reminder', () => {
+    // 截止 10 月 30 日 16:00，提前 3 天 = 10 月 27 日 16:00
+    const now = new Date(2026, 9, 27, 16, 0)
+    const data = withDeadline(new Date(2026, 9, 30, 16, 0), [4320, 60])
+    data.settings.reminderClockRules = []
+    const plan = buildReminderPlan(data, now)
+    expect(plan.actions).toHaveLength(1)
+    expect(plan.actions[0].sentKeys).toContain(`${data.deadlines[0].dueAt}|4320`)
   })
 })

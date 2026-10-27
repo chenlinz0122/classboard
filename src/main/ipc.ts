@@ -22,6 +22,7 @@ import type { SyncManager } from './syncManager'
 import { getAutoLaunchEnabled, launchAtLoginSupported } from './autostart'
 import { applyAutoLaunchPreference } from './autoLaunchController'
 import { notificationsSupported, showTestNotification } from './notifications'
+import { testWxPusher } from './push'
 import { parseCsv, stringifyCsv } from './csv'
 import { parseDueText } from '@shared/parseQuickAdd'
 
@@ -37,6 +38,8 @@ const SETTINGS_KEYS = new Set([
   'totalWeeks',
   'periods',
   'reminderOffsets',
+  'reminderClockRules',
+  'push',
   'classRemindersEnabled',
   'classReminderMinutes',
   'dailySummaryEnabled',
@@ -123,6 +126,17 @@ export function registerIpcHandlers(context: IpcContext): void {
   ipcMain.handle('app:test-notification', async () => {
     return showTestNotification(() => windows.showMain({ view: 'today' }))
   })
+
+  ipcMain.handle(
+    'app:test-wxpusher',
+    async (_event, raw: unknown): Promise<string | null> => {
+      const config = raw as { appToken?: unknown; uid?: unknown }
+      return testWxPusher({
+        appToken: String(config?.appToken ?? ''),
+        uid: String(config?.uid ?? '')
+      })
+    }
+  )
 
   ipcMain.handle('app:get-auto-launch', async () => getAutoLaunchEnabled())
 

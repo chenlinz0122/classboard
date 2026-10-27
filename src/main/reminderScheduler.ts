@@ -4,6 +4,8 @@ import type { DataStore } from './store'
 import type { WindowManager } from './windows'
 import { buildReminderPlan, type PlannedNotification } from './reminderPlan'
 import { notificationsSupported, showToast } from './notifications'
+import { sendWxPusher, wxPusherConfigured } from './push'
+import { logLine } from './log'
 
 const TICK_MS = 30_000
 const FIRST_CHECK_DELAY_MS = 2_500
@@ -107,6 +109,24 @@ export class ReminderScheduler {
     }
     if (action.deadlineId) {
       await this.store.markDeadlineNotifications(action.deadlineId, action.sentKeys ?? [action.key])
+    }
+    await this.pushToWx(action)
+  }
+
+  /** 微信推送：只推作业相关提醒；失败不影响本机通知与标记。 */
+  private async pushToWx(action: PlannedNotification): Promise<void> {
+    try {
+      const push = this.store.data.settings.push
+      if (!push?.wxpusherEnabled) return
+      if (!wxPusherConfigured({ appToken: push.wxpusherAppToken, uid: push.wxpusherUid })) return
+      if (action.kind !== 'deadline' && action.kind !== 'snooze') return
+      await sendWxPusher(
+        { appToken: push.wxpusherAppToken, uid: push.wxpusherUid },
+        action.title,
+        action.body
+      )
+    } catch (error) {
+      logLine(`[wxpusher] 提醒推送失败: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 

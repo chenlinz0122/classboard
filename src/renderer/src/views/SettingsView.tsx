@@ -22,7 +22,7 @@ import {
   Upload,
   WifiOff
 } from 'lucide-react'
-import type { Period } from '@shared/types'
+import type { Period, ReminderClockRule } from '@shared/types'
 import {
   formatWeekCount,
   formatWeekRange,
@@ -71,6 +71,9 @@ export function SettingsView(): React.JSX.Element {
   const [periods, setPeriods] = useState<Period[]>(settings.periods)
   const [opacity, setOpacity] = useState(Math.round(settings.widgetOpacity * 100))
   const [busy, setBusy] = useState<string | null>(null)
+  const [wxToken, setWxToken] = useState(settings.push?.wxpusherAppToken ?? '')
+  const [wxUid, setWxUid] = useState(settings.push?.wxpusherUid ?? '')
+  const [wxTestBusy, setWxTestBusy] = useState<string | null>(null)
 
   useEffect(() => {
     setOpacity(Math.round(data.settings.widgetOpacity * 100))
@@ -134,6 +137,59 @@ export function SettingsView(): React.JSX.Element {
       undefined,
       'reminders'
     )
+  }
+
+  const updateClockRule = async (index: number, patch: Partial<ReminderClockRule>): Promise<void> => {
+    const next = settings.reminderClockRules.map((rule, ruleIndex) =>
+      ruleIndex === index ? { ...rule, ...patch } : rule
+    )
+    await update({ reminderClockRules: next }, undefined, 'clock-rules')
+  }
+
+  const addClockRule = async (): Promise<void> => {
+    await update(
+      { reminderClockRules: [...settings.reminderClockRules, { daysBefore: 1, time: '20:00' }] },
+      undefined,
+      'clock-rules'
+    )
+  }
+
+  const removeClockRule = async (index: number): Promise<void> => {
+    await update(
+      { reminderClockRules: settings.reminderClockRules.filter((_, ruleIndex) => ruleIndex !== index) },
+      '已删除该时刻提醒',
+      'clock-rules'
+    )
+  }
+
+  const saveWxPusher = async (): Promise<void> => {
+    await update(
+      {
+        push: {
+          wxpusherEnabled: settings.push.wxpusherEnabled,
+          wxpusherAppToken: wxToken.trim(),
+          wxpusherUid: wxUid.trim()
+        }
+      },
+      '微信推送配置已保存',
+      'wxpusher'
+    )
+  }
+
+  const testWxPusher = async (): Promise<void> => {
+    setWxTestBusy('test')
+    try {
+      const error = await window.classboard.app.testWxPusher({ appToken: wxToken.trim(), uid: wxUid.trim() })
+      if (error) {
+        notify(error, 'error')
+      } else {
+        notify('测试消息已发送，请在微信里查看', 'success')
+      }
+    } catch (error) {
+      notify(error instanceof Error ? error.message : '测试失败', 'error')
+    } finally {
+      setWxTestBusy(null)
+    }
   }
 
   const applyAutoLaunch = async (enabled: boolean): Promise<void> => {
@@ -343,7 +399,7 @@ export function SettingsView(): React.JSX.Element {
             </div>
           </div>
           <div className="offset-chips">
-            {[1440, 360, 60, 30, 10].map((offset) => {
+            {[4320, 1440, 360, 60, 30, 10].map((offset) => {
               const active = pendingOffsets.has(offset)
               return (
                 <button
@@ -359,6 +415,121 @@ export function SettingsView(): React.JSX.Element {
               )
             })}
           </div>
+
+          <div className="settings-divider" />
+
+          <div className="subsection-head compact">
+            <div>
+              <h3>指定时刻提醒</h3>
+              <p>在截止日前固定时间点提醒，适合深夜截止的作业（如前一天 20:00）。对所有作业生效。</p>
+            </div>
+          </div>
+          <div className="clock-rule-list">
+            {settings.reminderClockRules.map((rule, index) => (
+              <div className="clock-rule-row" key={`${rule.daysBefore}-${rule.time}-${index}`}>
+                <select
+                  className="clock-rule-select"
+                  value={rule.daysBefore}
+                  disabled={busy !== null}
+                  onChange={(event) =>
+                    void updateClockRule(index, { daysBefore: Number(event.target.value) })
+                  }
+                >
+                  <option value={0}>截止当天</option>
+                  <option value={1}>前一天</option>
+                  <option value={2}>提前 2 天</option>
+                  <option value={3}>提前 3 天</option>
+                  <option value={7}>提前 7 天</option>
+                </select>
+                <input
+                  className="number-input"
+                  type="time"
+                  value={rule.time}
+                  disabled={busy !== null}
+                  onChange={(event) =>
+                    void updateClockRule(index, {
+                      time: sanitizeClock(event.target.value, rule.time)
+                    })
+                  }
+                />
+                <button
+                  type="button"
+                  className="icon-button danger"
+                  title="删除"
+                  disabled={busy !== null}
+                  onClick={() => void removeClockRule(index)}
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="ghost-button"
+            disabled={busy !== null}
+            onClick={() => void addClockRule()}
+          >
+            + 添加时刻提醒
+          </button>
+
+          <div className="settings-divider" />
+
+          <SwitchRow
+            title="微信推送（WxPusher）"
+            description="作业提醒同时发到微信。免费：在 wxpusher.zjiecode.com 创建应用拿 appToken，并按提示关注公众号获取 UID。"
+            checked={settings.push.wxpusherEnabled}
+            onChange={(checked) =>
+              void update(
+                { push: { ...settings.push, wxpusherEnabled: checked } },
+                checked ? '已开启微信推送' : '已关闭微信推送',
+                'wxpusher-toggle'
+              )
+            }
+          />
+          {settings.push.wxpusherEnabled ? (
+            <div className="wxpusher-config">
+              <label className="form-field">
+                <FieldLabel hint="创建应用后获得">appToken</FieldLabel>
+                <input
+                  className="text-input"
+                  type="text"
+                  value={wxToken}
+                  placeholder="AT_xxxx"
+                  onChange={(event) => setWxToken(event.target.value)}
+                />
+              </label>
+              <label className="form-field">
+                <FieldLabel hint="关注公众号后在「用户中心」查看">UID</FieldLabel>
+                <input
+                  className="text-input"
+                  type="text"
+                  value={wxUid}
+                  placeholder="UID_xxxx"
+                  onChange={(event) => setWxUid(event.target.value)}
+                />
+              </label>
+              <div className="wxpusher-actions">
+                <button
+                  type="button"
+                  className="ghost-button"
+                  disabled={busy !== null || wxTestBusy !== null}
+                  onClick={() => void saveWxPusher()}
+                >
+                  保存配置
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  disabled={busy !== null || wxTestBusy !== null}
+                  onClick={() => void testWxPusher()}
+                >
+                  {wxTestBusy ? <Spinner size={13} /> : null}
+                  发送测试消息
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           <div className="settings-divider" />
 

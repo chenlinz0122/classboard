@@ -27,10 +27,22 @@ export interface ReminderPlan {
   dailyDate?: string
 }
 
-function deadlineSentKeys(deadline: DeadlineItem, offsets: number[], now: Date): string[] {
-  const keys = offsets
-    .filter((offset) => now.getTime() >= new Date(deadline.dueAt as string).getTime() - offset * 60_000)
-    .map((offset) => `${deadline.dueAt}|${offset}`)
+/** 计算「指定时刻」规则在本轮是否已到达触发点；返回去重后的触发键。 */
+export function firedClockKeys(
+  dueAt: string,
+  rules: { daysBefore: number; time: string }[],
+  now: Date
+): string[] {
+  const due = new Date(dueAt)
+  if (!Number.isFinite(due.getTime())) return []
+  const keys: string[] = []
+  for (const rule of rules) {
+    const [h, m] = rule.time.split(':').map(Number)
+    const target = new Date(due.getFullYear(), due.getMonth(), due.getDate() - rule.daysBefore, h || 0, m || 0)
+    if (now.getTime() >= target.getTime()) {
+      keys.push(`${dueAt}|clock:${rule.daysBefore}:${rule.time}`)
+    }
+  }
   return keys
 }
 
@@ -109,18 +121,20 @@ export function buildReminderPlan(
     const triggered = effectiveOffsets
       .filter((offset) => now.getTime() >= due.getTime() - offset * 60_000)
       .sort((a, b) => a - b)
-    if (triggered.length === 0) continue
 
-    const smallestOffset = triggered[0]
-    const dueKey = `${deadline.dueAt}|${smallestOffset}`
-    if (sent[dueKey]) continue
+    const firedKeys = [
+      ...triggered.map((offset) => `${deadline.dueAt}|${offset}`),
+      ...firedClockKeys(deadline.dueAt as string, settings.reminderClockRules, now)
+    ]
+    if (firedKeys.length === 0) continue
+
+    const unsent = firedKeys.filter((key) => !sent[key])
+    if (unsent.length === 0) continue
+
+    const dueKey = unsent[0]
 
     const info = describeDeadline(deadline, now)
-    const allKeys = deadlineSentKeys(
-      deadline,
-      effectiveOffsets,
-      now
-    )
+    const allKeys = [...new Set(firedKeys)]
     if (now.getTime() > due.getTime()) {
       allKeys.push(`overdue:${deadline.dueAt}`)
     }

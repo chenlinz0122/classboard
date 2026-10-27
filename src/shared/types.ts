@@ -68,12 +68,32 @@ export interface SyncMeta {
   warning?: string
 }
 
+/**
+ * 指定时刻提醒规则：在截止日往前推 daysBefore 天的 time（本地时间 HH:mm）提醒。
+ * 例如 { daysBefore: 1, time: '20:00' } = 截止前一天晚上 8 点提醒，
+ * 适合截止时间为深夜的作业，避免「提前 1 天」在半夜触发。
+ */
+export interface ReminderClockRule {
+  /** 0 = 截止当天，1 = 前一天，2 = 提前 2 天…… */
+  daysBefore: number
+  /** HH:mm，本地时间 */
+  time: string
+}
+
 export interface Settings {
   /** YYYY-MM-DD, Monday of week 1 */
   semesterStart: string
   totalWeeks: number
   periods: Period[]
   reminderOffsets: number[]
+  /** 按具体时刻触发的提醒规则（全局，对所有未单独覆盖节点的作业生效）。 */
+  reminderClockRules: ReminderClockRule[]
+  /** 微信推送（WxPusher）配置；appToken/UID 为空表示未配置。 */
+  push: {
+    wxpusherEnabled: boolean
+    wxpusherAppToken: string
+    wxpusherUid: string
+  }
   classRemindersEnabled: boolean
   classReminderMinutes: number
   dailySummaryEnabled: boolean
@@ -331,6 +351,7 @@ export interface ClassboardApi {
 
   app: {
     testNotification: () => Promise<boolean>
+    testWxPusher: (config: { appToken: string; uid: string }) => Promise<string | null>
     getAutoLaunch: () => Promise<boolean>
     openExternal: (url: string) => Promise<void>
     quit: () => void

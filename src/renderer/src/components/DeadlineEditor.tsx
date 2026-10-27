@@ -7,7 +7,7 @@ import {
   fromDateTimeLocalValue,
   toDateTimeLocalValue
 } from '@shared/date'
-import { formatOffsetLabel } from '@shared/defaults'
+import { formatClockRuleLabel, formatOffsetLabel } from '@shared/defaults'
 import { useApp } from '../lib/appContext'
 import { FieldLabel, Modal, SelectChevron } from './ui'
 
@@ -202,7 +202,13 @@ export function DeadlineEditor({
           <div className="form-note">
             截止预览：{formatDueLabel(fromDateTimeLocalValue(dueLocal) ?? undefined, now)}
             {' · '}
-            提醒节点：{effectiveOffsets.map((offset) => formatOffsetLabel(offset)).join(' / ')}
+            提醒节点：
+            {effectiveOffsets.map((offset) => formatOffsetLabel(offset)).join(' / ')}
+            {data.settings.reminderClockRules.length > 0
+              ? `；${data.settings.reminderClockRules
+                  .map((rule) => formatClockRuleLabel(rule))
+                  .join(' / ')}`
+              : ''}
           </div>
         ) : null}
 

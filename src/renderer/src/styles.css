@@ -3713,6 +3713,82 @@ pre {
   color: var(--jade-strong);
 }
 
+.clock-rule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.clock-rule-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.clock-rule-select {
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.clock-rule-select:focus {
+  outline: none;
+  border-color: var(--jade-line);
+}
+
+.ghost-button {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 12px;
+  border: 1px dashed var(--line);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
+}
+
+.ghost-button:hover:not(:disabled) {
+  border-color: var(--jade-line);
+  background: var(--jade-soft);
+  color: var(--jade-strong);
+}
+
+.ghost-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.wxpusher-config {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 420px;
+}
+
+.wxpusher-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.icon-button.danger:hover:not(:disabled) {
+  background: rgba(220, 80, 70, 0.1);
+  color: #d05046;
+}
+
+.icon-button:disabled {
+  opacity: 0.55;
+}
+
 .inline-number-setting {
   display: flex;
   align-items: center;

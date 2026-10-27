@@ -84,6 +84,8 @@ const api: ClassboardApi = {
 
   app: {
     testNotification: () => ipcRenderer.invoke('app:test-notification'),
+    testWxPusher: (config: { appToken: string; uid: string }) =>
+      ipcRenderer.invoke('app:test-wxpusher', config),
     getAutoLaunch: () => ipcRenderer.invoke('app:get-auto-launch'),
     openExternal: (url: string) => ipcRenderer.invoke('app:open-external', url),
     quit: () => ipcRenderer.invoke('app:quit')
