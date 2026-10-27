@@ -1,0 +1,37 @@
+appId: com.classboard.hdu
+productName: 课表与DDL看板
+executableName: ClassBoard
+copyright: Copyright © 2026 ClassBoard
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+extraResources:
+  - from: resources
+    to: resources
+asar: true
+compression: normal
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.ico
+  artifactName: ClassBoard-${version}-Setup.${ext}
+  requestedExecutionLevel: asInvoker
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  include: build/installer.nsh
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: 课表与DDL看板
+  deleteAppDataOnUninstall: false
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
+  runAfterFinish: true
